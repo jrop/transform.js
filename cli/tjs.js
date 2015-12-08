@@ -51,14 +51,13 @@ const tjs_parseSourceFile = fname => new Promise((yes, no) => {
 function tjs_gulp_transformFile(file) {
 	// console.log(file)
 	return `gulp.task('${file.file}', function() {
-	let __t = require('./transform.js')
 	let pipe = gulp.src('${file.file}', { base: __dirname })
 
 	// pre-piping
 	if (typeof __t.start == 'function')
 		pipe = pipe.pipe(__t.start.bind(pipe)())
 
-	${file.transforms.length == 0 ? `if (typeof __t['default'] == 'function') pipe = __t['default'].bind(pipe)()` : ''}
+	${file.transforms.length == 0 ? `if (typeof __t.blank == 'function') pipe = __t.blank.bind(pipe)()` : ''}
 
 	${file.transforms.map(t => `// pipe setup for ${t.name}
 	pipe = __t.${t.name}.bind(pipe)${t.argsTuple}
@@ -99,7 +98,14 @@ co(function*main() {
 		let s = `'use strict'
 
 const gulp = require('gulp')
-const rimraf = require('rimraf')
+
+let __t = null
+try {
+	__t = require('./transform.js')
+} catch (e) {
+	console.error("Could not load 'transform.js!' Exiting...")
+	process.exit(1)
+}
 
 `
 
@@ -113,19 +119,26 @@ const rimraf = require('rimraf')
 		//
 		s += `
 
-gulp.task('default', [ ${files.map(f => "'" + f.file + "'")} ])
+gulp.task('default', [ ${files.map(f => "'" + f.file + "'")} ], function(cb) {
+	if (typeof __t['default'] == 'function')
+		return __t['default'](cb)
+	else
+		cb()
+})
 
 gulp.task('watch', [ 'default' ], function() {
 	${files.map(f => "gulp.watch('" + f.file + "', [ '" + f.file + "' ])").join('\n\t')}
 })
 
 gulp.task('clean', function(cb) {
-	let __t = require('./transform.js')
 	if (typeof __t.clean == 'function')
 		__t.clean(cb)
 	else
 		cb()
 })
+
+if (typeof __t.tasks == 'function')
+	__t.tasks(gulp)
 `
 
 		// print to STDOUT
