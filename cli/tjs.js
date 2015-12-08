@@ -11,26 +11,24 @@ const readline = require('readline')
 // Parse a file and look for the 'transform' directive
 //
 const tjs_parseSourceFile = fname => new Promise((yes, no) => {
+	let foundLine = false
 	let cfg = ''
 
 	let rl = readline.createInterface({
 		input: fs.createReadStream(path.join(process.cwd(), fname))
 	})
 	.on('line', line => {
-		let m = line.match(/^\s*\/\/%\s+(.*)$/)
-		if (m) {
-			cfg += m[1]
-
-			// console.log(m, line)
-			// stopped = true
-			// rl.close()
-			// yes({
-			// 	file: fname,
-			// 	transforms: m[1].split('|>').map(t => t.trim()).filter(t => t != '')
-			// })
+		let m = null
+		if ((m = line.match(/^\s*\/\/%(\s+(.*))?$/))) { // match: //%
+			cfg += m[2] || ''
+			foundLine = true
+		} else if ((m = line.match(/^\s*\/\*%(\s+(.*))?\*\/$/))) { // match: /*% */
+			cfg += m[2] || ''
+			foundLine = true
 		}
 	})
 	.on('close', () => {
+		// console.log('CFG', fname, foundLine, cfg)
 		cfg = cfg.split('|>')
 			.map(t => t.trim())
 			.filter(t => t != '')
@@ -43,8 +41,7 @@ const tjs_parseSourceFile = fname => new Promise((yes, no) => {
 				return { name, argsTuple }
 			})
 
-		// console.log('CFG', fname, cfg)
-		yes({ file: fname, transforms: cfg })
+		yes({ file: fname, transforms: !foundLine ? false : cfg })
 	})
 })
 
@@ -52,11 +49,24 @@ const tjs_parseSourceFile = fname => new Promise((yes, no) => {
 // Generate gulp subscript to transform an individual file based on it's header-spec
 //
 function tjs_gulp_transformFile(file) {
+	// console.log(file)
 	return `gulp.task('${file.file}', function() {
 	let __t = require('./transform.js')
 	let pipe = gulp.src('${file.file}', { base: __dirname })
-	${file.transforms.map(t => `pipe = pipe.pipe(__t.${t.name}${t.argsTuple})`).join('\n\t')}
-	return pipe.pipe(gulp.dest('./.tjs/'))
+
+	// pre-piping
+	if (typeof __t.start == 'function')
+		pipe = pipe.pipe(__t.start.bind(pipe)())
+
+	${file.transforms.map(t => `// pipe setup for ${t.name}
+	pipe = __t.${t.name}.bind(pipe)${t.argsTuple}
+	if (typeof __t.each == 'function') pipe = pipe.pipe(__t.each.bind(pipe)())`).join('\n\t')}
+
+	// post-piping
+	if (typeof __t.finish == 'function')
+		pipe = pipe.pipe(__t.finish.bind(pipe)())
+	
+	return pipe
 })`
 }
 
@@ -77,12 +87,15 @@ co(function*main() {
 		})
 
 		files = yield files.map(tjs_parseSourceFile)
-		files = files.filter(f => f != null && f.transforms.length > 0)
+		// console.log('BEFORE', files)
+		files = files.filter(f => f.transforms !== false)
+		// console.log('AFTER', files)
 
 		//
 		// gulp header
 		//
 		let s = `'use strict'
+
 const gulp = require('gulp')
 const rimraf = require('rimraf')
 
@@ -102,11 +115,6 @@ gulp.task('default', [ ${files.map(f => "'" + f.file + "'")} ])
 
 gulp.task('watch', [ 'default' ], function() {
 	${files.map(f => "gulp.watch('" + f.file + "', [ '" + f.file + "' ])").join('\n\t')}
-})
-
-gulp.task('clean', function(cb) {
-	rimraf.sync('./.tjs/')
-	cb()
 })
 `
 
