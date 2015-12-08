@@ -58,6 +58,8 @@ function tjs_gulp_transformFile(file) {
 	if (typeof __t.start == 'function')
 		pipe = pipe.pipe(__t.start.bind(pipe)())
 
+	${file.transforms.length == 0 ? `if (typeof __t['default'] == 'function') pipe = __t['default'].bind(pipe)()` : ''}
+
 	${file.transforms.map(t => `// pipe setup for ${t.name}
 	pipe = __t.${t.name}.bind(pipe)${t.argsTuple}
 	if (typeof __t.each == 'function') pipe = pipe.pipe(__t.each.bind(pipe)())`).join('\n\t')}
@@ -115,6 +117,14 @@ gulp.task('default', [ ${files.map(f => "'" + f.file + "'")} ])
 
 gulp.task('watch', [ 'default' ], function() {
 	${files.map(f => "gulp.watch('" + f.file + "', [ '" + f.file + "' ])").join('\n\t')}
+})
+
+gulp.task('clean', function(cb) {
+	let __t = require('./transform.js')
+	if (typeof __t.clean == 'function')
+		__t.clean(cb)
+	else
+		cb()
 })
 `
 
