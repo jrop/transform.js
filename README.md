@@ -1,5 +1,7 @@
 # transform.js
 
+[![Greenkeeper badge](https://badges.greenkeeper.io/jrop/transform.js.svg)](https://greenkeeper.io/)
+
 Transform.js is a gulpfile generator, automatically creating per-file gulp tasks by looking for special comments in source files.
 
 # Installing
