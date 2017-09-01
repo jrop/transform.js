@@ -14,7 +14,7 @@
   "license": "ISC",
   "dependencies": {
     "co": "^4.6.0",
-    "globby": "^4.0.0",
+    "globby": "^6.1.0",
     "mz": "^2.1.0"
   }
 }
